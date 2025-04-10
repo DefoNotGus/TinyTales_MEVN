@@ -20,6 +20,7 @@ Either way, the journey taught me a lot — and here we are with a working MEVN 
 
 2. **Run the setup script**:
    ```bash
+   chmod +x setup.sh
    ./setup.sh
    ```
 
