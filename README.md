@@ -1,4 +1,4 @@
-# TinyTales 🏰 [TinyTales Website](http://104.209.44.197/login)
+# TinyTales 🏰 [Website_link](http://104.209.44.197/login)
 
 > A not-so-tiny tale about switching stacks and battling bugs.
 
@@ -49,3 +49,7 @@ Either way, the journey taught me a lot — and here we are with a working MEVN 
 ## 🧙 May the force be with ya!
 
 Stay curious, keep experimenting, and don’t be afraid to change the stack mid-project (as long as you commit often ~And lack social life~😉).
+
+
+## Note
+> "tale-vue-frontend" is only for rebuilding frontend
