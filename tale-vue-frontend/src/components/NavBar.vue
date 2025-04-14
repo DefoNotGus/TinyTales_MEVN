@@ -5,10 +5,20 @@ import { useAuthStore } from '../stores/auth';
 const router = useRouter();
 const auth = useAuthStore();
 
-const handleLogout = () => {
-  auth.logout();
-  router.push('/login');
+const isGuest = () => auth.user?.role === 'guest';
+const isUser = () => auth.user && auth.user.role !== 'guest';
+
+
+const handleLogoutOrJoin = () => {
+  if (auth.isGuest || auth.isLoggedIn) {
+    auth.logout();
+    router.push('/login');
+  } else {
+    router.push('/login');
+  }
 };
+
+
 </script>
 
 <template>
@@ -18,17 +28,29 @@ const handleLogout = () => {
       <img src="/src/assets/logo.png" alt="Logo" class="logo" />
     </div>
 
-    <!-- Links (center) -->
+    <!-- Navigation Links -->
     <div class="nav-center">
-    <button @click="router.push('/')">Home</button>
-    <button v-if="auth.isLoggedIn()" @click="router.push('/create')">Create</button>
-    <button v-if="auth.isLoggedIn()" @click="router.push('/profile')">{{ auth.user.username }}'s </button>
-    <button v-if="auth.isLoggedIn()" @click="router.push('/settings')">Settings</button>
+      <button @click="router.push('/home')">Home</button>
+
+      <!-- Guest-only links -->
+      <template v-if="isGuest()">
+        <button @click="router.push('/create')">Create</button>
+      </template>
+
+      <!-- Real user links -->
+      <template v-if="isUser()">
+        <button @click="router.push('/create')">Create</button>
+        <button @click="router.push('/profile')">{{ auth.user.username }}'s</button>
+        <button @click="router.push('/settings')">Settings</button>
+        <button @click="router.push('/ranks')">Ranks</button>
+      </template>
     </div>
 
-    <!-- Logout (right) -->
+    <!-- Right-side button -->
     <div class="nav-right">
-      <button v-if="auth.isLoggedIn()" @click="handleLogout">Logout</button>
+      <button @click="handleLogoutOrJoin">
+        {{ isGuest() ? 'Log in | Join in' : 'Logout' }}
+      </button>
     </div>
   </nav>
 </template>
@@ -54,21 +76,12 @@ const handleLogout = () => {
   display: flex;
   justify-content: center;
   gap: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .nav-right {
   display: flex;
   align-items: center;
-}
-
-router-link {
-  color: white;
-  text-decoration: none;
-  font-weight: bold;
-}
-
-router-link:hover {
-  text-decoration: underline;
 }
 
 button {
@@ -85,6 +98,7 @@ button {
 button:hover {
   background-color: rgba(255, 255, 255, 0.3);
 }
+
 .nav-center button {
   background-color: transparent;
   border: 2px solid white;
@@ -101,5 +115,4 @@ button:hover {
   background-color: rgba(255, 255, 255, 0.2);
   color: #f0f0f0;
 }
-
 </style>

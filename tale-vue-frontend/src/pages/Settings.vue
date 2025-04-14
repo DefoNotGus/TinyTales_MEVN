@@ -1,56 +1,73 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth';
 import { useToast } from 'vue-toastification';
 import { useRouter } from 'vue-router';
 import NavBar from '../components/NavBar.vue';
+import ClaimerBox from '../components/ClaimerBox.vue'; // Adjust the path if needed
+
+
 
 const auth = useAuthStore();
 const toast = useToast();
 const router = useRouter();
 
-const userId = ref(auth.user?._id || '');
-const email = ref(auth.user?.email || '');
-const username = ref(auth.user?.username || '');
-const usertype = ref(auth.user?.usertype || 'novice');
+const userId = ref('');
+const email = ref('');
+const confirmEmail = ref('');
+const confirmWord = ref('');
+const generatedWord = ref('');
+const username = ref('');
+const usertype = ref('novice');
 const password = ref('');
 
 const updating = ref(false);
 const deleting = ref(false);
 
-onMounted(() => {
-  if (!userId.value) {
-    toast.error('User info missing. Please log in again.');
-    router.push('/login');
-  }
-});
+// ✅ SAFER: watch for hydration instead of immediate access
+watch(
+  () => auth.user,
+  (user) => {
+    if (!user || !user._id) {
+      toast.error('User info missing. Please log in again.');
+      router.push('/login');
+    } else {
+      userId.value = user._id;
+      email.value = user.email;
+      username.value = user.username;
+      usertype.value = user.usertype;
+    }
+  },
+  { immediate: true } // Run on load too
+);
 
 const suggestUsername = async () => {
+  const prefixes = ['Sir', 'Lady', 'The', 'Il', 'Duke', 'Le', 'Majesty', 'Tis', 'Countess', 'Baroness', 'Lord', 'Queen', 'King'];
+  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+
   try {
-    const response = await axios.get('https://random-word-api.herokuapp.com/word?number=1');
-    const word = response.data[0];
-    username.value = `Sir_${word}`;
+    const response = await axios.get('https://usernameapiv1.vercel.app/api/random-usernames?count=1');
+    const word = response.data.usernames[0];
+    username.value = `${randomPrefix}_${word}`;
   } catch (err) {
     toast.error('⚠️ Failed to fetch username suggestion.');
   }
 };
 
+
 const isUsernameUnique = async (newUsername) => {
-  if (newUsername === auth.user?.username) return true; // unchanged, allow it
+  if (newUsername === auth.user?.username) return true;
 
   try {
     const res = await axios.get('http://localhost:3000/api/users/');
-    const allUsers = res.data.data; // ← THIS IS THE FIX
-    const exists = allUsers.some(user => user.username === newUsername);
-    return !exists;
+    const allUsers = res.data.data;
+    return !allUsers.some(user => user.username === newUsername);
   } catch (err) {
-    console.error(err);
     toast.error('❌ Failed to check existing usernames.');
     return false;
   }
 };
-
 
 const handleUpdate = async () => {
   if (password.value && password.value.length < 8) {
@@ -77,9 +94,7 @@ const handleUpdate = async () => {
       usertype: usertype.value,
     };
 
-    if (password.value) {
-      updates.password = password.value;
-    }
+    if (password.value) updates.password = password.value;
 
     await axios.put(
       `http://localhost:3000/api/users/${auth.user._id}`,
@@ -101,10 +116,34 @@ const handleUpdate = async () => {
 };
 
 const handleDelete = async () => {
-  if (!confirm('⚠️ Are you sure you want to delete your account?')) return;
+  // Step 1: Get a random word if not already fetched
+  if (!generatedWord.value) {
+    try {
+      const res = await fetch('https://random-word-api.herokuapp.com/word?number=1');
+      const [word] = await res.json();
+      generatedWord.value = word;
+      toast.warning(`📝 Type your email and the word: "${word}" to confirm deletion`);
+      return;
+    } catch (err) {
+      toast.error('⚠️ Failed to generate confirmation word.');
+      return;
+    }
+  }
+
+  // Step 2: Verify email and word match
+  if (confirmEmail.value !== email.value.trim()) {
+    toast.error('❌ Email mismatch.');
+    return;
+  }
+
+  if (confirmWord.value !== generatedWord.value) {
+    toast.error('❌ Word mismatch.');
+    return;
+  }
 
   try {
     deleting.value = true;
+
     await axios.delete(`http://localhost:3000/api/users/${auth.user._id}`, {
       headers: {
         Authorization: `Bearer ${auth.token}`,
@@ -118,16 +157,21 @@ const handleDelete = async () => {
     toast.error(err.response?.data?.message || 'Failed to delete account.');
   } finally {
     deleting.value = false;
+    confirmEmail.value = '';
+    confirmWord.value = '';
+    generatedWord.value = '';
   }
 };
+
 </script>
+
 
 <template>
     <div>
       <NavBar />
       <div class="settings-page">
         <h2>Account Settings</h2>
-  
+        
         <form @submit.prevent="handleUpdate" class="settings-form">
           <label for="email">Email (not changeable)</label>
           <div class="non-editable">{{ email }}</div>
@@ -137,6 +181,9 @@ const handleDelete = async () => {
             <input id="username" v-model="username" type="text" required />
             <button type="button" @click="suggestUsername">🎲 Suggest</button>
           </div>
+          <p class="warning-note">
+            ⚠️ Changing your username may cause you to lose access to your tales and claimed comments.
+          </p>
   
           <label for="password">New Password (optional)</label>
           <input id="password" v-model="password" type="password" placeholder="At least 8 characters" />
@@ -153,11 +200,27 @@ const handleDelete = async () => {
             {{ updating ? 'Updating...' : 'Update Account' }}
           </button>
         </form>
-  
+        <ClaimerBox />
         <div class="delete-section">
           <hr />
           <h4>Danger Zone</h4>
           <p>Deleting your account will remove all your tales and comments.</p>
+
+          <div v-if="generatedWord">
+            <input
+              type="email"
+              v-model="confirmEmail"
+              placeholder="Enter your email"
+              class="confirm-input"
+            />
+            <input
+              type="text"
+              v-model="confirmWord"
+              :placeholder="`Type  ${generatedWord}`"
+              class="confirm-input"
+            />
+          </div>
+
           <button class="delete-button" @click="handleDelete" :disabled="deleting">
             {{ deleting ? 'Deleting...' : '🗑️ Delete My Account' }}
           </button>
@@ -254,5 +317,22 @@ const handleDelete = async () => {
     background-color: #d2a6a3;
     cursor: not-allowed;
   }
+
+  .confirm-input {
+  display: block;
+  width: 100%;
+  padding: 0.6rem;
+  margin: 0.5rem 0;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+.warning-note {
+  font-size: 0.9rem;
+  color: #aa0000;
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+}
+
   </style>
   

@@ -51,24 +51,38 @@ export const deleteUser = async (req, res) => {
 
 export const signup = async (req, res) => {
     const { username, email, password } = req.body;
-
+  
     try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: "User already exists" });
-        }
-
-        const usertype = "novice"; // Default usertype
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ username, email, password: hashedPassword, usertype });
-        await newUser.save();
-
-
-        res.status(201).json({ message: "User created successfully", user: newUser });
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists" });
+      }
+  
+      const usertype = "novice";
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = new User({ username, email, password: hashedPassword, usertype });
+      await newUser.save();
+  
+      // ✅ Generate JWT token like in loginUser
+      const token = jwt.sign({ id: newUser._id, username: newUser.username }, SECRET, {
+        expiresIn: "1h"
+      });
+  
+      res.status(201).json({
+        success: true,
+        message: "User created successfully",
+        user: {
+          _id: newUser._id,
+          username: newUser.username,
+          email: newUser.email,
+          usertype: newUser.usertype
+        },
+        token, // ✅ Include token for frontend use
+      });
     } catch (error) {
-        res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ message: "Internal server error" });
     }
-};
+  };
 
 export const login = async (req, res) => {
     const { email, password } = req.body;

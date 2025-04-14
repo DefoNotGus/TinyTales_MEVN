@@ -1,144 +1,68 @@
+<template>
+  <div>
+    <h2>Tales Dashboard</h2>
+
+    <div v-if="!tales || tales.length === 0" class="loading-message">
+      No tales to show.
+    </div>
+
+    <ul v-else class="tale-list">
+      <TaleCardHP
+        v-for="tale in tales"
+        :key="tale._id"
+        :tale="tale"
+        @read-tale="handleReadTale"
+        @like-tale="likeTale"
+        @comment-posted="$emit('reload')"
+      />
+    </ul>
+  </div>
+</template>
+
 <script setup>
-import { ref, onMounted } from 'vue';
+import { defineProps, defineEmits } from 'vue';
 import axios from 'axios';
-import { useToast } from 'vue-toastification';
+import TaleCardHP from '../components/TaleCardHP.vue';
 import { useAuthStore } from '../stores/auth';
+import { useToast } from 'vue-toastification';
+
+const props = defineProps({
+  tales: Array
+});
+
+const emit = defineEmits(['read-tale', 'reload']);
 
 const toast = useToast();
 const auth = useAuthStore();
 
-const tales = ref([]);
-const loading = ref(true);
-const error = ref(null);
-const commentText = ref({});
-const expandedTales = ref(new Set());
-
-const loadTales = async () => {
-  loading.value = true;
-  try {
-    const response = await axios.get('http://localhost:3000/api/tales');
-    tales.value = response.data.data
-      .filter(t => t.visibility === 'public')
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // newest first
-  } catch (err) {
-    console.error('Error fetching tales:', err);
-    error.value = 'Failed to load tales.';
-  } finally {
-    loading.value = false;
-  }
+const handleReadTale = (id) => {
+  emit('read-tale', id);
 };
 
 const likeTale = async (id) => {
+  if (!auth.isLoggedIn) {
+    toast.error("Please log in to cheer.");
+    return;
+  }
+
   try {
     await axios.patch(`http://localhost:3000/api/tales/${id}/like`, {
       username: auth.user.username,
+    }, {
+      headers: {
+        Authorization: `Bearer ${auth.token}`
+      }
     });
-    await loadTales();
+    emit('reload'); // Let HomePage.vue reload tales
   } catch (err) {
     console.error('Like error:', err.response?.data || err.message);
     toast.error('Failed to like the tale.');
   }
 };
-
-const submitComment = async (taleId) => {
-  const text = commentText.value[taleId];
-  if (!text || !text.trim()) return;
-
-  try {
-    await axios.post(`http://localhost:3000/api/tales/${taleId}/comments`, {
-      commenter: auth.user.username,
-      text: text.trim(),
-    });
-
-    commentText.value[taleId] = '';
-    toast.success('Comment added!');
-    await loadTales();
-  } catch (err) {
-    console.error('Comment error:', err.response?.data || err.message);
-    toast.error('Failed to post comment.');
-  }
-};
-
-const toggleComments = (id) => {
-  if (expandedTales.value.has(id)) {
-    expandedTales.value.delete(id);
-  } else {
-    expandedTales.value.add(id);
-  }
-};
-
-onMounted(loadTales);
 </script>
 
-<template>
-  <div>
-    <h2>Public Tales</h2>
 
-    <div v-if="loading" class="loading-message">Loading...</div>
-    <div v-else-if="error">{{ error }}</div>
 
-    <ul v-else class="tale-list">
-      <li
-        v-for="tale in tales"
-        :key="tale._id"
-        :class="['tale-card', { ghost: tale.authortype === 'ghost' }]"
-      >
-        <h3>{{ tale.title }}</h3>
-        <p>{{ tale.content }}</p>
-        <div class="author-likes">
-            <div class="author">
-                <strong>Author:</strong>
-                <span v-if="tale.authortype === 'ghost'">👻 ghosty (ghost)</span>
-                <span v-else>{{ tale.author }} ({{ tale.authortype }})</span>
-            </div>
-
-            <!-- Likes -->
-            <div class="likes">
-            <button @click="likeTale(tale._id)">🍻 Cheers!</button>
-            <span>{{ tale.likes?.length || 0 }} Toasts </span>
-            </div>
-        </div>
-
-        <!-- Comments -->
-        <div class="comments">
-          <h4>
-            Comments
-            <button @click="toggleComments(tale._id)">
-              {{ expandedTales.has(tale._id) ? '▲ Hide' : '▼ Show All' }}
-            </button>
-          </h4>
-
-          <ul class="comment-list">
-            <!-- Show only last comment unless expanded -->
-            <template v-if="!expandedTales.has(tale._id)">
-              <li v-if="tale.comments.length > 0">
-                <strong>{{ tale.comments.at(-1).commenter }}</strong>:
-                {{ tale.comments.at(-1).text }}
-              </li>
-            </template>
-            <template v-else>
-              <li v-for="(comment, index) in tale.comments" :key="index">
-                <strong>{{ comment.commenter }}</strong>: {{ comment.text }}
-              </li>
-            </template>
-          </ul>
-
-          <form @submit.prevent="submitComment(tale._id)" class="comment-form">
-            <input
-              v-model="commentText[tale._id]"
-              type="text"
-              placeholder="Add a comment..."
-              class="comment-input"
-            />
-            <button type="submit" class="comment-button">💬</button>
-          </form>
-        </div>
-
-        <hr />
-      </li>
-    </ul>
-  </div>
-</template>
 
 <style scoped>
 /* Container for the full tale list */
@@ -296,4 +220,21 @@ h2 {
   color: #5e2e6e;
   margin-top: 2rem;
 }
+
+.read-more-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #f3e6ff;
+  border: 2px solid #7d3c98;
+  border-radius: 6px;
+  font-weight: bold;
+  color: #5e2e6e;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.read-more-btn:hover {
+  background-color: #ecd6ff;
+}
+
 </style>

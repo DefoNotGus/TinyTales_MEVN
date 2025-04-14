@@ -1,19 +1,27 @@
 // backend/routes/user.route.js
 import express from "express";
-import { getUsers, updateUser, deleteUser, signup, login, getUserProfile } from "../controllers/user.controller.js";
-// import { protect } from "../middleware/auth.js";
+import {
+  getUsers,
+  updateUser,
+  deleteUser,
+  signup,
+  login,
+  getUserProfile,
+} from "../controllers/user.controller.js";
+
+import { protect } from "../middleware/auth.js"; // ✅ uncomment and use
 
 const router = express.Router();
 
-router.get("/", getUsers);
+router.get("/", protect, getUsers); // Only for admin or secure dashboard?
+router.put("/:id", protect, updateUser);
+router.delete("/:id", protect, deleteUser);
 
-router.put("/:id", updateUser);
-router.delete("/:id", deleteUser);
-
-// Route for user signup
+// Open routes
 router.post("/signup", signup);
-
-// Route for user login
 router.post("/login", login);
+
+// Optional: add route for user profile
+router.get("/profile", protect, getUserProfile);
 
 export default router;

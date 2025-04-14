@@ -1,96 +1,108 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { useAuthStore } from '../stores/auth';
 import NavBar from '../components/NavBar.vue';
+import TaleFilters from '../components/TaleFilters.vue';
+import TaleCard from '../components/TaleCard.vue';
+import TaleChanger from '../components/TaleChanger.vue';
+import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
-const allTales = ref([]);
-const loading = ref(true);
-const error = ref(null);
-const selectedFilter = ref('all'); // default view
 
+const allTales = ref([]);
+const selectedFilter = ref('all');
+const selectedTaleId = ref(null);
+const showChanger = ref(false);
+
+// 🧲 Load tales by the logged-in user
 const loadUserTales = async () => {
-  loading.value = true;
   try {
-    const response = await axios.get('http://localhost:3000/api/tales');
-    // Filter tales by current user
+    const response = await axios.get('/api/tales');
     allTales.value = response.data.data
-      .filter(tale => tale.author === auth.user.username)
+      .filter(t => t.author === auth.user.username)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   } catch (err) {
-    console.error('Error fetching user tales:', err);
-    error.value = 'Failed to load your tales.';
-  } finally {
-    loading.value = false;
+    console.error('❌ Failed to load tales:', err);
   }
 };
 
-// ✅ Clean separation with ghost priority
-const ghostTales = computed(() =>
-  allTales.value.filter(t => t.authortype === 'ghost')
-);
+// 🧼 Filter tales based on user-selected type
+const filteredTales = () => {
+  let tales = allTales.value;
 
-const publicTales = computed(() =>
-  allTales.value.filter(
-    t => t.authortype !== 'ghost' && t.visibility === 'public'
-  )
-);
-
-const privateTales = computed(() =>
-  allTales.value.filter(
-    t => t.authortype !== 'ghost' && t.visibility === 'private'
-  )
-);
-
-const visibleTales = computed(() => {
-  switch (selectedFilter.value) {
-    case 'public': return publicTales.value;
-    case 'private': return privateTales.value;
-    case 'ghost': return ghostTales.value;
-    default:
-      return [
-        ...ghostTales.value,
-        ...publicTales.value,
-        ...privateTales.value
-      ];
+  // 🎯 Apply filtering
+  if (selectedFilter.value === 'ghost') {
+    tales = tales.filter(t => t.authortype === 'ghost');
+  } else if (selectedFilter.value === 'public' || selectedFilter.value === 'private') {
+    tales = tales.filter(t => t.visibility === selectedFilter.value && t.authortype !== 'ghost');
   }
-});
+  // 'top' and 'all' don't filter anything
+
+  // 🔢 Apply sorting
+  if (selectedFilter.value === 'top') {
+    const getRating = (roses) => {
+      const rateMap = { tomato: 0, low: 1, 'mid-low': 2, mid: 3, 'mid-high': 4, high: 5 };
+      let total = 0, count = 0;
+      for (const key in roses || {}) {
+        const value = rateMap[key] ?? 0;
+        const votes = roses[key]?.length || 0;
+        total += value * votes;
+        count += votes;
+      }
+      return count === 0 ? 0 : total / count;
+    };
+    tales = tales.slice().sort((a, b) => getRating(b.roses) - getRating(a.roses));
+  } else {
+    tales = tales.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  return tales;
+};
+
+
+// 🧙 Open/close tale editor
+const openTale = (id) => {
+  selectedTaleId.value = id;
+  showChanger.value = true;
+};
+
+const closeTale = () => {
+  selectedTaleId.value = null;
+  showChanger.value = false;
+  loadUserTales(); // 🔄 Refresh list after managing
+};
 
 onMounted(loadUserTales);
 </script>
 
 <template>
-  <div>
-    <NavBar />
-    <div class="profile-page">
-      <h2>Your Tales</h2>
+  <NavBar />
+  <div class="profile-page">
+    <h2>Your Tales</h2>
+    <TaleFilters v-model="selectedFilter" />
 
-      <div class="filter-buttons">
-        <button @click="selectedFilter = 'all'" :class="{ active: selectedFilter === 'all' }">📖 All</button>
-        <button @click="selectedFilter = 'public'" :class="{ active: selectedFilter === 'public' }">🌍 Public</button>
-        <button @click="selectedFilter = 'private'" :class="{ active: selectedFilter === 'private' }">🔒 Private</button>
-        <button @click="selectedFilter = 'ghost'" :class="{ active: selectedFilter === 'ghost' }">👻 Ghost</button>
-      </div>
+    <ul v-if="!showChanger" class="tale-list">
+      <TaleCard
+        v-for="tale in filteredTales()"
+        :key="tale._id"
+        :tale="tale"
+        @open="openTale"
+      />
+    </ul>
 
-      <div v-if="loading">Loading your tales...</div>
-      <div v-else-if="error">{{ error }}</div>
+    <p v-if="!filteredTales().length && !showChanger">
+      No tales to show in this category.
+    </p>
 
-      <ul v-else class="tale-list">
-        <li v-for="tale in visibleTales" :key="tale._id" :class="['tale-card', { ghost: tale.authortype === 'ghost' }]">
-          <h4>{{ tale.title }}</h4>
-          <p>{{ tale.content }}</p>
-          <p><strong>Visibility:</strong> {{ tale.visibility }}</p>
-          <p><strong>Type:</strong> {{ tale.authortype }}</p>
-        </li>
-      </ul>
-
-      <p v-if="!visibleTales.length && !loading" style="text-align: center; margin-top: 2rem;">
-        No tales to show in this category.
-      </p>
-    </div>
+    <TaleChanger
+      v-show="showChanger"
+      :taleId="selectedTaleId"
+      :onClose="closeTale"
+    />
   </div>
 </template>
+
+
 
 <style scoped>
 .profile-page {

@@ -4,11 +4,17 @@ import dotenv from "dotenv";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-
+import guestRoutes from './backend/routes/guest.route.js';
 import { connectDB } from "./backend/config/db.js";
 import userRoutes from "./backend/routes/user.route.js";
 import taleRoutes from "./backend/routes/tale.route.js";
 import { logoutUser } from "./backend/controllers/auth.controller.js";
+import introRoutes from './backend/routes/intro.route.js';
+import './backend/utils/scheduler.js';
+
+
+
+
 
 dotenv.config();
 
@@ -34,11 +40,15 @@ app.use(express.static(frontendPath));
 app.use("/api/tales", taleRoutes);
 app.use("/api/users", userRoutes);
 app.post("/api/logout", logoutUser);
+app.use('/api/guest', guestRoutes);
+app.use('/api/ratings', introRoutes);
 
 // 🎯 Catch-all for SPA routes (must come AFTER API routes!)
 app.get("*", (req, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
 });
+
+app.set('trust proxy', 1); // trust first proxy (if using a reverse proxy like Nginx)
 
 // 🧠 Connect DB and start server
 app.listen(PORT, () => {

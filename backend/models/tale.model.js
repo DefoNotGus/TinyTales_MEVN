@@ -15,6 +15,11 @@ const taleSchema = new mongoose.Schema({
 		  type: String,
 		  required: true,
 		},
+		genre: {
+			type: String,
+			required: true,
+			default: 'unknown', // optional default
+		  },		  
 		authortype: {
 		  type: String,
 		  required: true,
@@ -31,17 +36,57 @@ const taleSchema = new mongoose.Schema({
 				default: Date.now,
 			  },
 			},
-		  ],		
+		  ],
+		  roses: {
+			tomato: [String],
+			low: [String],
+			'mid-low': [String],
+			mid: [String],
+			'mid-high': [String],
+			high: [String],
+		  },				  
 	comments: [
 		{
 		  commenter: String,
 		  text: String,
+    	guestauthor: { type: String, default: null },
 		  timestamp: {
 			type: Date,
 			default: Date.now,
 		  },
 		},
 	  ],
+	  guestcomments: [
+		{	
+			commenter: { 
+			type: String, 
+			default: null },
+			guestauthor: { 
+			type: String, 
+			default: null },
+		  guestId: {
+			type: String,
+			required: true,
+		  },
+		  emoji: {
+			type: String,
+			default: '👤',
+		  },
+		  text: {
+			type: String,
+			required: true,
+		  },
+		  timestamp: {
+			type: Date,
+			default: Date.now,
+		  },
+		},
+	  ],
+	  receipt: {
+		type: String,
+		default: null
+	  },	  
+	  	  
   }, {
 	timestamps: true,
   });

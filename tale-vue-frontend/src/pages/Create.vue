@@ -1,58 +1,95 @@
-<!-- src/pages/Create.vue -->
 <template>
-    <div class="create-page">
-      <NavBar />
-  
-      <div class="form-container">
-        <h2>Submit a New Tale</h2>
-        <form @submit.prevent="handleSubmit">
+  <div class="create-page">
+    <NavBar />
+
+    <div class="form-container">
+      <h2>Submit a New Tale</h2>
+
+      <!-- Guest Receipt Popup -->
+      <div v-if="receiptPopup" class="receipt-popup">
+        <p>🧾 Your tale has been submitted!</p>
+        <p><strong>Save this receipt to reclaim your tale:</strong></p>
+        <div class="receipt-token">{{ generatedReceipt }}</div>
+        <button @click="router.push('/home')" class="btn">Go to Home</button>
+      </div>
+
+      <form v-else @submit.prevent="handleSubmit">
         <div class="form-group">
-            <label for="title">Title</label>
-            <input id="title" v-model="title" type="text" class="form-control" required />
+          <label for="title">Title</label>
+          <input id="title" v-model="title" type="text" class="form-control" required />          
+          <input
+            v-model="honeypot"
+            type="text"
+            class="honeypot"
+            autocomplete="off"
+            tabindex="-1"
+          />
         </div>
 
         <div class="form-group">
-            <label for="content">Content</label>
-            <textarea id="content" v-model="content" rows="6" class="form-control" required></textarea>
+          <label for="content">Content</label>
+          <textarea id="content" v-model="content" rows="6" class="form-control" required></textarea>
+          <!-- 🕵️ Honeypot: invisible to humans -->
+
+          <!-- 🛡️ Text Protection Options -->
+        <TextProtector v-model="content" />
         </div>
 
+        <!-- Shared Genre Field -->
         <div class="form-group">
+          <label for="genre">Genre</label>
+          <select id="genre" v-model="genre" class="form-control">
+            <option value="mystery">Mystery</option>
+            <option value="mythology">Mythology</option>
+            <option value="horror">Horror</option>
+            <option value="comedy">Comedy</option>
+            <option value="conspiracy">Conspiracy</option>
+            <option value="legend">Legend</option>
+          </select>
+        </div>
+
+        <!-- Only for logged-in users -->
+        <template v-if="!isGuest">
+          <div class="form-group">
             <label for="author">Author</label>
             <input id="author" v-model="author" type="text" class="form-control" readonly />
-        </div>
+          </div>
 
-        <div class="form-group">
+          <div class="form-group">
             <label for="authortype">Author Type</label>
             <select id="authortype" v-model="authorType" class="form-control">
-            <option value="novice">Novice</option>
-            <option value="lector">Lector</option>
-            <option value="storyteller">Storyteller</option>
-            <option value="ghost">Ghost</option>
+              <option value="novice">Novice</option>
+              <option value="lector">Lector</option>
+              <option value="storyteller">Storyteller</option>
+              <option value="ghost">Ghost</option>
             </select>
-        </div>
+          </div>
 
-        <div class="form-group d-flex justify-content-between align-items-center">
+          <div class="form-group d-flex justify-content-between align-items-center">
             <label>Visibility</label>
             <button type="button" @click="toggleVisibility" class="visibility-toggle">
-            <i :class="visibility === 'public' ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
-            {{ visibility }}
+              <i :class="visibility === 'public' ? 'bi bi-eye' : 'bi bi-eye-slash'"></i>
+              {{ visibility }}
             </button>
-        </div>
+          </div>
+        </template>
 
         <button type="submit" class="btn btn-teal w-100 mt-3">Submit Tale</button>
-        </form>
         <p v-if="error" class="text-danger mt-2">{{ error }}</p>
-      </div>
+      </form>
     </div>
-  </template>
-  
-  <script setup>
+  </div>
+</template>
+
+<script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import NavBar from '../components/NavBar.vue';
 import { useToast } from 'vue-toastification';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
+import TextProtector from '../components/TextProtector.vue';
+
 
 const toast = useToast();
 const auth = useAuthStore();
@@ -60,9 +97,24 @@ const router = useRouter();
 
 const title = ref('');
 const content = ref('');
+const genre = ref('mystery');
 const author = ref('');
 const authorType = ref('novice');
 const visibility = ref('public');
+
+const receiptPopup = ref(false);
+const generatedReceipt = ref('');
+const error = ref('');
+const honeypot = ref(''); // optional basic spam trap
+
+const isGuest = !auth.user || !auth.user.username;
+
+const emojiList = [
+  '👻', '🦊', '🦁', '🐶', '🦜', '🐺', '🦧', '🤠',
+  '👹', '🐉', '🧙‍♂️', '🧛‍♀️', '🦄', '🐲', '🕷️', '💀',
+  '🎃', '👺', '🐸', '🙈', '🦝', '🐵', '🐙', '👽',
+  '👾', '🐻', '🧟‍♂️', '👮‍♂️', '🧞‍♂️', '🕵️‍♀️', '🐥', '🧌'
+];
 
 onMounted(() => {
   author.value = auth.user?.username || '';
@@ -72,32 +124,58 @@ const toggleVisibility = () => {
   visibility.value = visibility.value === 'public' ? 'private' : 'public';
 };
 
+const generateReceipt = () => {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const emoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+  return `${code}${emoji}`;
+};
+
 const handleSubmit = async () => {
+  // Optional spam honeypot check
+  if (honeypot.value.trim() !== '') {
+    toast.error('Submission rejected.');
+    return;
+  }
+
   const tale = {
     title: title.value.trim(),
     content: content.value.trim(),
-    author: author.value.trim(),
-    authortype: authorType.value,
-    visibility: visibility.value,
+    genre: genre.value,
+    visibility: visibility.value
   };
 
+  if (isGuest) {
+    tale.author = '👻Guest';
+    tale.authortype = 'ghost';
+    const receipt = generateReceipt();
+    generatedReceipt.value = receipt;
+    tale.receipt = receipt;
+  } else {
+    tale.author = author.value.trim();
+    tale.authortype = authorType.value;
+  }
+
   try {
-    const res = await axios.post('http://localhost:3000/api/tales', tale, {
+    await axios.post('http://localhost:3000/api/tales', tale, {
       headers: {
-        Authorization: `Bearer ${auth.token}`,
-      },
+        Authorization: `Bearer ${auth.token}`
+      }
     });
 
     toast.success('📖 Tale submitted successfully!');
     title.value = '';
     content.value = '';
+    genre.value = 'mystery';
     authorType.value = 'novice';
     visibility.value = 'public';
 
-    // 🚀 Redirect to home page
-    router.push('/home');
+    if (isGuest) {
+      receiptPopup.value = true;
+    } else {
+      router.push('/home');
+    }
   } catch (err) {
-    toast.error(err.response?.data?.message || 'Failed to submit tale.');
+    error.value = err.response?.data?.message || 'Failed to submit tale.';
   }
 };
 </script>
@@ -196,5 +274,9 @@ select {
 .visibility-toggle i {
   font-size: 1.5rem; /* ⬆️ Bigger icon */
 }
+.honeypot {
+  display: none;
+}
+
   </style>
   
