@@ -3,10 +3,9 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
+  base: './', // ✅ Makes assets use relative paths (fixes HTTP/HTTPS issues)
   plugins: [vue()],
-  server: {
-    proxy: {
-      '/api': 'http://localhost:3000', // 👈 backend server port
-    },
+  build: {
+    outDir: '../frontend', // ✅ Exports build straight into your Express public folder
   },
 });
